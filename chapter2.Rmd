@@ -1,13 +1,97 @@
-# Insert chapter 2 title here
+# Chapter 2: Regression and model validation: a case study
 
-*Describe the work you have done this week and summarize your learning.*
 
-- Describe your work and results clearly. 
-- Assume the reader has an introductory course level understanding of writing and reading R code as well as statistical methods.
-- Assume the reader has no previous knowledge of your data or the more advanced methods you are using.
+
+This week we dug into regression analysis, and model validation. Both very useful and interesting, and, I have to say, somewhat foreign to me. Too long has passeed since I last dabbed in statistics. Much reading was to be done to be able to grasp the concepts well enough. Overall I think this week gave me a good basic understanding of how to conduct regressional analysis with RStudio. 
+
 
 ```{r}
 date()
 ```
+This week's dataset komes from Kimmo Vehkalahti. It contains data collected by him in a survey conducted among university students in an introductory course to social sciences. The data was collected between Dec. 2014 and Jan. 2015. The survey was conducted among 183 students, and it includes data on 56 questionnaire variables, 1 compound variable (attitude), and three contextualizing variables (age, sex, points in final exam), bringing the total to 60 columns.
 
-Here we go again...
+This data was cleaned and made uniform as follows: 
+- the survey measured  three different approaches of learning, represented by answers in appropriate columns. These values were merged  into three compound value columns corresponding to three different approaches: deep, surface (surf) and strategic (strat). The numerical value of the new columns is the mean  answers pertinent to each category (original answers were on a scale of 1 to 5). 
+- The "attitude" compound column was scaled to the same level (1-5).
+- the now superfluous raw data survey columns were removed, leaving 7 columns: age, sex, points, attitude, deep, surf and strat.
+- rows with values of zero in the "points" column (17 in total) were removed, leaving 166 rows. Since the aim of the data was to measure the impact of studying attitudes and the approaches to learning with success in exam as the main measurement of their impact, the rows without exam results were redundant.
+- as minor data curation procedures the naming of headers was normalized
+
+In the following code the .csv-file containing the cleaned data is read into the variable "learning2014", and its dimensions (dim)
+ and structure (str) are checked to make sure eveything is as it should be.
+ 
+ 
+ 
+```{r}
+library(tidyverse)
+setwd("data")
+learning2014 <- read_csv("learning2014.csv")
+
+dim(learning2014)
+str(learning2014)
+```
+
+
+
+The data and its seven main variables can be summarized as follows:
+
+```{r}
+
+library(GGally)
+library(ggplot2)
+p <- ggpairs(learning2014, mapping = aes(col = learning2014$gender, alpha = 0.3), lower = list(combo = wrap("facethist", bins = 20)))
+p
+summary(learning2014)
+
+```
+
+
+The data includes more female (110) and younger (median age 22 years) participants. The strongest correlation with exam points is found with attitude of students and "strategic" approach to learning. Male participants show somewhat higher scores in attitude. Age correlated best with "strategic" approach to learning. The three variables "deep", "strategic" and "attitude" show positive interralation. We will choose these last three as explanatory variables, with points being the target variable.
+
+
+
+```{r}
+
+my_model <- lm(points ~ attitude + stra + deep, data = learning2014)
+summary(my_model)
+
+
+```
+
+
+This summary shows the significance of each explanatory variable in relation to the target variable. First it lists residuals, the difference of the predicted model and the actual value. Of the coefficients interlinked t value and p value (Pr(>|t|)) are most significant. Looking at them, it seems that the variable "deep" does not bear correlation with points (Pr(>|t| 0.31974), and is statistically non-significant. Thus we will leave it out of the equation and recalculate with two explanatory variables.
+
+
+
+```{r}
+
+my_model2 <- lm(points ~ attitude + stra, data = learning2014)
+summary(my_model2)
+
+
+```
+
+
+A slightly better result. Attitude seems to be the single most significant single factor explaining the exam result (p < 6.31e-09). Of the different approaches to studying "strategic" bears most significance. It  has a p-value of 8.9%, verging on being statistically significant, but not quite. The adjusted R-squared -value of 0.1951 tells us that c. 19.5% of the points the students got from the exam can be explained by their attitude and adherence to strategic approach to learning, with attitude accounting for almost all of this effect. The p-value is 7.734e-09, very significant, and the F-statistic 20.99 is considerably larger than Critical F on 2 and 163 degrees of freedom (~3.0). Therefore we can reject the null hypothesis.
+
+What remains are regression diagnostics, shown below in three tables.
+
+
+
+```{r}
+
+
+par(mfrow = c(2,2))
+plot(my_model2, c(1, 2, 5))
+
+
+```
+
+
+The residuals vs Fitted model -graph confirms that the fitted model is appropriate; the residuals and the fitted values are uncorrelated. The Normal Q-Q shows no evidence of major departure from linearity, confirming the sample data follows normal distribution and is not skewed. Residuals vs Leverage shows no data points fall outside Cook's distance, and therefore there are no influential individual datapoints. Everything checks out.
+
+
+
+
+
+
