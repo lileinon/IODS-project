@@ -6,7 +6,7 @@
 Feeling a little bewildered. Lots to take in. Had forgotten about the syntax of R, been years since last time since I used it. The intro throught the book was thorough, but reading is for not the same as hands-on when it comes to coding. At least the book works as a good source for reference in the future.
 
 
-## Linkki Githubiin
+## Link to my Github
 <https://github.com/lileinon/IODS-project>
 
 ```{r}

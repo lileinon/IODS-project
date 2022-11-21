@@ -1,0 +1,230 @@
+# Chapter 3: Logistic regression
+
+This week was all about the title. The statistics were interesting and the tools powerful. Should be useful in the future. The only problem I continuously have with R is that every function seems to be like a "magic box". I just put in some numbers, and it does its magic in secret, spewing out magnificent graphs and whatnot, but I always feel like I have no clue or maybe even control how it does what it does. Like driving with an autopilot: just enter the destination, and the car takes care of everything. Can I say that I drove there? Or even that I _can_ drive, if all I do is input destinations? Each function works differently; this seems not so much about learning general R syntax, but instead learning which function does what, and what you need to feed it. Perhaps the feeling ensues because earlier on I have mostly done everything step-by-step by myself, each graph and such. This feels almost like cheating at times, and on the other hand like giving away control.
+
+
+
+```{r}
+date()
+```
+
+## 1. Create chapter3.Rmd-file created in data wrangling -> child to index.Rmd
+
+#### Done. 
+
+
+Also, loading all the needed libraries here.
+
+```{r}
+library(scales); library(dplyr); library(tidyverse); library(ggplot2); library(boot)
+
+```
+
+## 2. Read the data into R. 
+#### Print out the names of the variables and describe the data set briefly, assuming the reader has no previous knowledge of it. (0-1 points)
+
+Okey dokey. This week's dataset comes from Portugal. It was collected by P. Cortez and A. Silva for a paper published in 2008, and the raw data was made available on UCI Machine Learning Repository in 2014 ([link, with info on the variables etc.](https://archive.ics.uci.edu/ml/datasets/Student+Performance)). Originally the dataset consisted of two distinct but overlapping questionnaires conducted in a math class and portuguese class. The questionnaire gathered much background info of the students, e.g. their domestic situation, siblings, the occupation of the parents, and the student's alcohol consumption (full list of column names below; only the chosen variables explained in detail). As target variables the data included three grades, G1 and G2 the grades of first two trimesters, and G3 as the grade for the third trimester and for the whole course at the same time. All in all the data consists of 33 variables, of which 27 were contextualizing variables describing the student's background and social status, and 6 changing variables connected with how well they did in class (the three grade -columns; absences; previous failures of the course; and, whether the student had taken extra paid classes on the course subject or not).
+
+The dataset for math students included 395 students and for portuguese 649 students. Although anonymized, the background questions allowed combining students who had answered both questionnaires, and selecting only them . This left us with 370 students. Their grades were averaged for a single number. The questionnaire's two columns on alcohol consumption (graded on a scale of 1-5) were combined into one column, alc_use, and those whose weekly dosage grade surpassed 2 were then marked out into separate high_use -column. The meaning of this analysis is to study the relationship between high/low alcohol consumption and some of the other variables in the data.
+
+
+```{r}
+setwd("data")
+alc <- read_csv("alc.csv", show_col_types = FALSE)
+
+colnames(alc)
+
+```
+
+
+## 3. Choose 4 interesting variables in the data 
+#### for each of them, present your personal hypothesis about their relationships with alcohol consumption. (0-1 point)
+
+The 4 variables I have chosen to be analysed in relation with alcohol consumption are:
+
+1. **Absences** (variable name: absences; numeric, from 0 to 45)
+ - hypotheses: correlates positively with high alcohol consumption
+2. **Going out with friends** (variable name: goout; numeric: from 1 - very low to 5 - very high)
+ - hypotheses: correlates positively with high alcohol consumption
+3. **Extra-curricular activities** (variable name: activities; binary: yes or no)
+ - hypotheses: correlates negatively with high alcohol consumption
+4. **Weekly study time** (variable name: studytime; numeric: 1 - <2 hours, 2 - 2 to 5 hours, 3 - 5 to 10 hours, or 4 - >10 hours)
+ - hypotheses: correlates negatively with high alcohol consumption
+
+Going out a lot with friends would probably be most highly correlated with high alcohol consumption. High alcohol consumption also could cause absences from classes. The last two, on the other hand, are such that they would limit ones ability to partake in sociable drinking.
+
+
+## 4. Numerically and graphically explore the distributions of your chosen variables and their relationships with alcohol consumption 
+
+#### Use for example cross-tabulations, bar plots and box plots. Comment on your findings and compare the results of your exploration to your previously stated hypotheses. (0-5 points)
+
+This will be a "preliminary" probe, with brief overviews on each chosen variable.
+
+
+### 4.1 Absences
+
+Absences is a numeric value with amount of absences, high_use is a binary. Correlation, if any, should be visible from a simple boxplot.
+
+```{r}
+
+plot_absences <- ggplot(alc, aes(x = high_use, y = absences))
+plot_absences + geom_boxplot() + ggtitle("1. Amount of absences vs. high use of alcohol")
+
+```
+
+The hypotheses seems to be corrected, and the correlation significant.
+
+### 4.2 Going out with friends
+
+Going out was graded on a scale from 1 to 5, and high_use is a binary. A barplot should reveal if there are any differences between the two groups of high-users and low-users.
+
+```{r}
+
+plot_goout <- ggplot(alc, aes(x = goout))
+plot_goout + geom_bar() + facet_wrap("high_use", labeller = label_both) + ggtitle("2. going out with friends vs. high alcohol usage") 
+
+```
+
+As visible from the barplot, the high users do go out a lot more than the low users. The barplot leans heavily to the right. A simple check of mean values and distribution percentages confirms the hypotheses. 
+
+```{r}
+
+alc %>% group_by(high_use) %>% summarise(count = n(), mean_goout = mean(goout))
+alc %>% group_by(high_use, goout) %>% summarise(count = n()) %>% ungroup() %>% group_by(high_use) %>% mutate(percentage = percent(count/sum(count)))
+
+```
+
+
+### 4.3 Extra-curricular activities
+
+Extra-curricular activities is a binary value, as is high_use. A simple check of the amounts might give us an overview
+
+
+```{r}
+
+alc %>% group_by(high_use, activities) %>% summarise(count = n()) %>% ungroup() %>% group_by(high_use) %>% mutate(percentage = percent(count/sum(count)))
+
+```
+
+Perhaps surprisingly not a significant difference in extracurricular activities between the two groups; both basically break even. Further inquiries regarding this variable would be futile. 
+
+
+
+### 4.4 Studying time
+
+Weekly study time is a numeric field (values: 1 - <2 hours, 2 - 2 to 5 hours, 3 - 5 to 10 hours, or 4 - >10 hours). A barplot should do the trick for overview of correlation.
+
+
+```{r}
+
+plot_studytime <- ggplot(alc, aes(x = studytime))
+plot_studytime + geom_bar() + facet_wrap("high_use", labeller = label_both) + ggtitle("4. Weekly study time vs. high alcohol usage") 
+
+alc %>% group_by(high_use, studytime) %>% summarise(count = n()) %>% ungroup() %>% group_by(high_use) %>% mutate(percentage = percent(count/sum(count)))
+
+```
+
+As can be seen, almost 90% of high alcohol users studied less than 5 hours per week, whereas lower alcohol users are more normally divided, with much more time used on studies. Correlation is strong here.
+
+
+
+
+## 5. Use logistic regression to statistically explore the relationship between your chosen variables and the binary high/low alcohol consumption variable as the target variable. 
+#### Present and interpret a summary of the fitted model. Present and interpret the coefficients of the model as odds ratios and provide confidence intervals for them. Interpret the results and compare them to your previously stated hypothesis. (0-5 points)
+
+
+Okey dokey. First the code, then the analysis.
+
+```{r}
+
+m <- glm(high_use ~ absences + goout  + activities + studytime, data = alc, family = "binomial")
+summary(m)
+
+# compute odds ratios (OR)
+OR <- coef(m) %>% exp
+
+# compute confidence intervals (CI)
+CI <- confint(m) %>% exp
+
+# print out the odds ratios with their confidence intervals
+cbind(OR, CI)
+
+```
+
+##### Statistical significance:
+Absences, going out and studytime are significant statistically (p-values 0.00166, 7.64e-10 and 0.00092 respectively). Activities, on the other hand, are statistically insignificant as noted already earlier. The correlations were also correctly assumed in the preliminary hypotheses in regard of the three statistically significant variables.
+
+##### The odds ratios and confidence intervals:
+OR and CI show that 1 absence equals 7 percent heightened likelihood of the person belonging to the group of high users, with values in real population falling between 2.7 and 12.2 percent. Similarly belonging to 1 higher group in studytime meant 43 percent reducted likelihood to belong to high users, real life population values between 59.5 and 21.2 percent. Belonging to higher group in going out -variable, on the other hand, meant a whopping 108 percent heightened likelyhood to be a high alcohol user, with real population values between 66 and 165.7 percent. The CI of activities includes 1, which shows its effect, positive or negative, can not be speculated in real population. 
+
+
+
+## 6. Using the variables which, according to your logistic regression model, had a statistical relationship with high/low alcohol consumption, explore the predictive power of you model. 
+
+#### Provide a 2x2 cross tabulation of predictions versus the actual values and optionally display a graphic visualizing both the actual values and the predictions. Compute the total proportion of inaccurately classified individuals (= the training error) and comment on all the results. Compare the performance of the model with performance achieved by some simple guessing strategy. (0-3 points)
+
+
+We'll use the statistically significant variables found, absences, goout and studytime.
+
+```{r}
+m2 <- glm(high_use ~ absences + goout + studytime, data = alc, family = "binomial")
+
+probabilities <- predict(m, type = "response")
+
+# add the predicted probabilities to 'alc2'
+alc2 <- mutate(alc, probability = probabilities)
+
+# use the probabilities to make a prediction of high_use
+alc2 <- mutate(alc2, prediction = probability > 0.5)
+
+# tabulate the target variable versus the predictions
+table(high_use = alc2$high_use, prediction = alc2$prediction)
+
+```
+
+```{r}
+g <- ggplot(alc2, aes(x = probability, y = high_use))
+
+# define the geom as points and draw the plot
+g + geom_point(aes(col = prediction))
+
+# tabulate the target variable versus the predictions
+table(high_use = alc2$high_use, prediction = alc2$prediction) %>% prop.table() %>% addmargins()
+```
+```{r}
+
+# define a loss function (mean prediction error)
+loss_func <- function(class, prob) {
+  n_wrong <- abs(class - prob) > 0.5
+  mean(n_wrong)
+}
+
+# call loss_func to compute the average number of wrong predictions in the (training) data
+loss_func(class = alc2$high_use, prob = alc2$probability)
+
+
+```
+
+Loss function gives 22.4% falsely predicted individuals. The false positives and false negatives in cross-tabulation gives 17.0% + 5.4% = 22.4% of falsely predicted individuals, the same number. This is the total proportion of inaccurately classified individuals (= the training error).
+
+
+
+
+## 7. Bonus: Perform 10-fold cross-validation on your model. 
+
+Does your model have better test set performance (smaller prediction error using 10-fold cross-validation) compared to the model introduced in the Exercise Set (which had about 0.26 error). Could you find such a model? (0-2 points to compensate any loss of points from the above exercises)
+
+
+```{r}
+cv <- cv.glm(data = alc2, cost = loss_func, glmfit = m, K = 10)
+
+# average number of wrong predictions in the cross validation
+cv$delta[1]
+
+```
+
+It seems this model has better test set performance (0.23) than the Exercise Set (0.26). 
+
+
+## 8. Super-Bonus: NOT DONE
+
