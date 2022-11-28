@@ -1,0 +1,295 @@
+
+
+# Chapter 4: Clustering and classification
+
+Reflections: This week was horribly busy for me, and also I became ill. I barely had the time to do the exercises and the assignments. I did skim-read through Kimmo's book chapters also, but I must say that the whole concept of how clustering works seems a bit ...vague? Yes, it works, but seems that every method either/both of 1) researcher doing guesswork of where to cut the clusters or 2) the clustering having such a random-factor that the results can only be repeated by forcing a fixed random-seed. Which sounds rather strange and does not make one feel that the process is even possible to be firmly grasped. But, I will try my best. As mentioned in the book, clustering is a basic concept of reasoning, and an absolutely necessary tool for data analysis.
+
+
+
+```{r}
+date()
+```
+
+
+## 1. Create chapter4.rmd -file etc.
+
+Done.
+
+```{r}
+
+# I will load all the needed libraries and the dataset here for convenience
+
+library(MASS)
+library(tidyverse)
+library(corrplot)
+
+```
+
+## 2. Load data, explore and describe it
+
+
+```{r}
+data("Boston")
+
+str(Boston)
+dim(Boston)
+
+glimpse(Boston)
+
+```
+
+The [Boston dataset](https://stat.ethz.ch/R-manual/R-devel/library/MASS/html/Boston.html) is a classic dataset that is distributed as part of the basic R package. Its title, "Housing Values in Suburbs of Boston" describes its origins well enough. The dataset was gathered for the 1978 article "Hedonic prices and the demand for clean air" (J. Environ. Economics and Management 5, 81–102) by D. Harrison and D.L. Rubinfeld. The 14 variables map factors that affected housing prices in suburbs (called "towns" in documentation; we'll use the same term henceforth) around and include information on - for instance - crime rate, amount of nitrogen oxides in air, and access to Boston's radial highways. Data has been already cleaned; it entails 506 rows of observations and 14 columns of variables.
+
+The variables are: 
+
+- **crim**: per capita crime rate by town.
+- **zn**: proportion of residential land zoned for lots over 25,000 sq.ft.
+- **indus**: proportion of non-retail business acres per town.
+- **chas**: Charles River dummy variable (= 1 if tract bounds river; 0 otherwise).
+- **nox**: nitrogen oxides concentration (parts per 10 million).
+- **rm**: average number of rooms per dwelling.
+- **age**: proportion of owner-occupied units built prior to 1940.
+- **dis**: weighted mean of distances to five Boston employment centres.
+- **rad**: index of accessibility to radial highways.
+- **tax**: full-value property-tax rate per $10,000.
+- **ptratio**: pupil-teacher ratio by town.
+- **black**: $1000(Bk - 0.63)^2$ where $Bk$ is the proportion of blacks by town.
+- **lstat**: lower status of the population (percent).
+- **medv**: median value of owner-occupied homes in $1000s.
+
+
+
+
+## 3. Summary of variables and graphical overview 
+
+
+```{r}
+summary(Boston)
+
+cor_matrix <- cor(Boston) %>% round(2)
+corrplot(cor_matrix, method="circle", type = "upper", cl.pos = "b", tl.pos = "d", tl.cex = 0.6)
+
+```
+
+##### Summary 
+Many very natural distributions, as with airborne NoX -gases. Yet, some of the values are uneven. Crime-variable for instance varies from 0.006 to 88.976, with a median of 0.25 and mean of 3.61 - it seems that there is a huge variety (and a lot of outliers) in crime between towns, with a few of them accounting for the majority of the cases. Non-retail business, on the other hand, are divided more evenly, but wealth is clearly unevenly divided (*lstat* and *medv*). Amount of POC (variable *black*) does also seem to probably have a lot of outliers (min: 0.32, 1st qu: 375.38, mean 356.67). Some variables seem to bear some interconnection due to similar spread (for instance *dis*, *rad*, *zn*).
+
+##### Plot
+As can be seen, some of these values mentioned above are interconnected. Lower status and median value of homes are negatively correlated to a very high degree. Amount of rooms correlates positively with more expensive houses, as can be expected. Interestingly, the *dis*-variable (distances to employment centres) reveals societal structures and characters of the economical centers: older housing and smaller lots on the zoned land, more (non-retail) businesses which bring more customers and employees driving daily by cars, and hence more nitrogen dioxide in the air; also more crime and more lower status inhabitants. This dynamic seems to work as a sort of a heuristic key on how to read the data. As another instance of the same phenomenon the variable rad "access to radial highways" connects all the datapoints pertinent to the same dynamic: highways connect major centers. Crime rate is connected with this variable to a high degree for this reason. 
+
+As an additional check, I will do some boxplots of some of the variables mentioned in the summary analysis. The amount of outliers makes it clear that we are dealing with data that is not evenly spread, and should be checked for clusters. As a preliminary hypothesis we might say that most likely they would be built around the dynamic of more populous and dense commercial towns vs. less populous smaller towns, with much less crime, pollution, commerce, etc. 
+
+
+```{r}
+par(mfrow = c(1, 5))
+boxplot(Boston$crim, main = "crim", col = "purple", outcol = "red")
+boxplot(Boston$zn, main = "zn", col = "blue", outcol = "red")
+boxplot(Boston$lstat, main = "lstat", col = "yellow", outcol = "red")
+boxplot(Boston$medv, main = "medv", col = "orange", outcol = "red")
+boxplot(Boston$black, main = "black", col = "green", outcol = "red")
+```
+
+## 4. Standardizing, creating categorical variable and "train" and "test" -datasets
+
+Next, we will standardize the dataset and print out summaries of the scaled data. The data will be scaled so that all the mean values of all the variables will be 0 [zero]. 
+
+```{r}
+boston_scaled <- as.data.frame(scale(Boston))
+summary(boston_scaled)
+```
+
+Then, as mentioned in the chapter title, we will create a categorical variable to replace the old crime value with, and the training and testing datasets.
+
+
+```{r}
+
+boston_scaled$crim <- as.numeric(boston_scaled$crim)
+bins <- quantile(boston_scaled$crim)
+labels <- c("low", "med_low", "med_high", "high")
+crime <- cut(boston_scaled$crim, breaks = bins, include.lowest = TRUE, label = labels)
+boston_scaled <- dplyr::select(boston_scaled, -crim)
+boston_scaled <- data.frame(boston_scaled, crime)
+summary(boston_scaled)
+
+n <- nrow(boston_scaled)
+ind <- sample(n,  size = n * 0.8)
+train <- boston_scaled[ind,]
+test <- boston_scaled[-ind,]
+
+```
+
+
+## 5. LDA on the train set
+
+Next we'll fit the linear discriminant analysis on the train set. Categorical crime rate is the target variable, with the other variables as predictors. 
+
+```{r}
+lda.fit <- lda(crime ~ ., data = train)
+
+# the function for lda biplot arrows
+lda.arrows <- function(x, myscale = 1, arrow_heads = 0.1, color = "red", tex = 0.75, choices = c(1,2)){
+  heads <- coef(x)
+  arrows(x0 = 0, y0 = 0, 
+         x1 = myscale * heads[,choices[1]], 
+         y1 = myscale * heads[,choices[2]], col=color, length = arrow_heads)
+  text(myscale * heads[,choices], labels = row.names(heads), 
+       cex = tex, col=color, pos=3)
+}
+
+classes <- as.numeric(train$crime)
+plot(lda.fit, dimen = 2, col = classes, pch = classes)
+lda.arrows(lda.fit, myscale = 2)
+```
+
+The variable *rad* has highest correlation with crime rate, and mainly through it we ware able to cluster the towns with highest crime rates. The second and third most important factors are *nox* and *zn*, which basically differentiate the towns in order of their population density. 
+
+
+
+## 6. Predicting with LDA on the test data
+
+Next we'll use the test set data to predict the crime rate classes, and cross-tabulate them with actual results. First we'll save them as their own variable.
+
+
+```{r}
+
+correct_classes <- test$crime
+test <- dplyr::select(test, -crime)
+
+lda.pred <- predict(lda.fit, newdata = test)
+
+# cross tabulate the results
+table(correct = correct_classes, predicted = lda.pred$class)
+
+```
+
+As can be seen, the model does predict most of the cases correctly, with more accuracy in the low and high ends of the spectrum.
+
+
+
+
+## 7. K-means clustering
+
+Following the assignment, we'll first reload the dataset and standardize it to bring the means to zero. 
+
+
+```{r}
+data(Boston)
+boston_scaled <- scale(Boston)
+summary(boston_scaled)
+```
+
+Next, we'll count the Eucledian distances between the observations, and check out the summary of the values.
+
+```{r}
+dist_eu <- dist(boston_scaled)
+summary(dist_eu)
+
+```
+Next we'll run a k-means algorithm on the dataset. 
+
+```{r}
+set.seed(13)
+
+km <- kmeans(boston_scaled, centers = 4)
+
+pairs(boston_scaled, col = km$cluster)
+
+```
+
+Four clusters seems like a lot. Let's try to gauge the optimal number of clusters via WCSS -analysis. A sharp turn in the graph should indicate where wouuld be a good value to make the cut. 
+
+
+```{r}
+set.seed(123)
+
+k_max <- 10
+twcss <- sapply(1:k_max, function(k){kmeans(Boston, k)$tot.withinss})
+qplot(x = 1:k_max, y = twcss, geom = 'line')
+```
+
+Optimal point for clustering seems to be 2. Let's rerun the k-means analysis with 2 clusters.
+
+
+```{r}
+set.seed(13)
+
+km <- kmeans(boston_scaled, centers = 2)
+pairs(boston_scaled, col = km$cluster)
+
+```
+
+Not very informative due to the small size. Let's take into closer look the variables we denoted correlated earlier: *crim*, *zn*, *nox*, *dis*, *rad*, *lstat* and *medv*.
+
+
+```{r}
+pairs(boston_scaled[, c(1, 2, 5, 8, 9, 13, 14)], col = km$cluster)
+```
+
+Some of these might be still dropped, but in the main it seems  that these two clusters denote meaningful and significant differences between two groups of opservations in the data. The commercial and economical centers have smaller lots, poorer air quality, better access to ringroads, more poor people, and less expensive homes. Further analysis would be needed to elaborate more.
+
+### DONE
+
+
+
+
+
+
+## Bonus: NOT DONE
+
+Just not enough time. Being ill with a small baby has its drawbacks
+
+
+## Super-Bonus: FIRST PART DONE
+
+Yet, this seems intriguing. Who doesn't want more dimensions? Gotta try, I'll give it "15 minutes", and just list the instructions here as I go through them. Not for the points, but for the coolness factor of 3D thingies. 
+
+
+##### Run the code below for the (scaled) train data that you used to fit the LDA. The code creates a matrix product, which is a projection of the data points.
+
+```{r}
+model_predictors <- dplyr::select(train, -crime)
+# check the dimensions
+dim(model_predictors)
+dim(lda.fit$scaling)
+# matrix multiplication
+matrix_product <- as.matrix(model_predictors) %*% lda.fit$scaling
+matrix_product <- as.data.frame(matrix_product)
+
+```
+
+##### Next, install and access the plotly package. 
+
+```{r}
+# install.packages("plotly")
+library(plotly)
+```
+
+
+##### Create a 3D plot (cool!) of the columns of the matrix product using the code below.
+
+```{r}
+plot_ly(x = matrix_product$LD1, y = matrix_product$LD2, z = matrix_product$LD3, type= 'scatter3d', mode='markers')
+```
+# #WOW 
+
+
+##### Adjust the code: add argument color as a argument in the plot_ly() function. Set the color to be the crime classes of the train set. 
+
+```{r}
+plot_ly(x = matrix_product$LD1, y = matrix_product$LD2, z = matrix_product$LD3, type= 'scatter3d', mode='markers', color=classes)
+```
+It is beautiful. Oh wait, I can move it! *C O O L*
+
+
+##### Draw another 3D plot where the color is defined by the clusters of the k-means. 
+
+```{r}
+# plot_ly(x = matrix_product$LD1, y = matrix_product$LD2, z = matrix_product$LD3, type= 'scatter3d', mode='markers', color=km$cluster)
+```
+
+Okey dokey. This produces error. Probably because the km$cluster is not part of the data matrix that we created... I should join the values from the cluster-column to the train-set, and then create the data matrix and the 3D-plot again... but this time I think I will just go to bed and sleep.
+
+Peace out.
+
+
+
