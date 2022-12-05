@@ -33,51 +33,95 @@ str(gii)
 # ?rename
 
 hd <- rename(hd, 
-             "hdi_rank" = "HDI Rank",
-             "country" = "Country",
-             "hdi" = "Human Development Index (HDI)", 
-             "life_exp" = "Life Expectancy at Birth",
-             "edu_exp" = "Expected Years of Education",
-             "edu_mean" = "Mean Years of Education",
-             "gni" = "Gross National Income (GNI) per Capita",
-             "gni_hdi_rank" = "GNI per Capita Rank Minus HDI Rank" 
+             "HDI.rank" = "HDI Rank",
+             "HDI" = "Human Development Index (HDI)", 
+             "Life.Exp" = "Life Expectancy at Birth",
+             "Edu.Exp" = "Expected Years of Education",
+             "Edu.Mean" = "Mean Years of Education",
+             "GNI" = "Gross National Income (GNI) per Capita",
+             "GNI.HDI.Rank" = "GNI per Capita Rank Minus HDI Rank" 
              )
 
 gii <- rename(gii,
-             "gii_rank" = "GII Rank",
-             "country" = "Country",
-             "gii" = "Gender Inequality Index (GII)",
-             "mat_mor" = "Maternal Mortality Ratio",
-             "ado_birth" = "Adolescent Birth Rate",
-             "rep_parl" = "Percent Representation in Parliament",
-             "edu2F" = "Population with Secondary Education (Female)",
-             "edu2M" = "Population with Secondary Education (Male)",
-             "labF" = "Labour Force Participation Rate (Female)",
-             "labM" = "Labour Force Participation Rate (Male)",
+             "GII.Rank" = "GII Rank",
+             "GII" = "Gender Inequality Index (GII)",
+             "Mat.Mor" = "Maternal Mortality Ratio",
+             "Ado.Birth" = "Adolescent Birth Rate",
+             "Parli.F" = "Percent Representation in Parliament",
+             "Edu2.F" = "Population with Secondary Education (Female)",
+             "Edu2.M" = "Population with Secondary Education (Male)",
+             "Lab.F" = "Labour Force Participation Rate (Female)",
+             "Lab.M" = "Labour Force Participation Rate (Male)",
              )
 
 
 ########### 5 ############# mutate gii + 2 new vars, (edu2FM and labFM)
 
 gii <- mutate(gii,
-              edu2FM = edu2F / edu2M,
-              labFM = labF / labM
+              Edu2.FM = Edu2.F / Edu2.M,
+              Lab.FM = Lab.F / Lab.M
               )
 
 
-########### 6 ############# create human and save it as csv
+########### 6 ############# create human and save it as csv -> Turned obsolete, will redo later
 
-human <- inner_join(hd, gii, by = "country")
-dim(human)
+human <- inner_join(hd, gii, by = "Country")
 
+#getwd()
+#setwd("data")
 
-getwd()
-setwd("data")
-
-write_csv(human, "human.csv") 
+#write_csv(human, "human.csv") 
 
 
 
 # checked, is fine
 # All done.
 
+
+# NEW / CONTINUING DATA WRANGLING
+
+# Data already loaded, 195 observations of 19 variables, human development index and gender inequality index -factors. 
+
+########### 5.1 ############# GNI to numeric
+
+str(human)
+
+# as can be seen, GNI already is numeric, but if it would not be,  removing commas and changing the type to numeric would work with:
+# human$gni <- gsub(",", "", human$gni) %>% as.numeric
+
+
+########### 5.2 ############# Keep only 9 variables as instructed:
+
+# columns to keep
+keep <- c("Edu2.FM", "Lab.FM", "Country", "Life.Exp", "Edu.Exp", "GNI", "Mat.Mor", "Ado.Birth", "Parli.F")
+
+# select the 'keep' columns
+human <- select(human, one_of(keep))
+
+########### 5.3 ############# Remove rows with NA:
+
+human <- filter(human, complete.cases(human))
+
+########### 5.4 ############# Remove regions
+
+last <- nrow(human) - 7
+human <- human[1:last, ]
+
+########### 5.5 ############# Rename rows as countries, remove country-column
+
+
+rownames(human) <- human$Country
+
+human_ <- select(human, -Country)
+
+
+### write to file ###
+
+
+getwd()
+setwd("data")
+
+write.csv(human_, "human.csv", row.names = TRUE) # had to use write.csv because writing row names wasn't apparently possible in write_csv
+
+
+###### DONE #########

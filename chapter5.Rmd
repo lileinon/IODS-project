@@ -1,0 +1,187 @@
+
+# Assignment 5 - Dimensionality reduction
+
+
+```{r}
+date()
+```
+
+
+Some  reflections: has been a really tiring week, and I'm writing this in the middle of the night. So, the analyses are a little bit more lively than usual, sorry for that. Not much sleep due to having a small baby, but I'm still glad that I have managed to do this course. This week reading through Kimmo's work I kinda felt that I actually understood the concepts. The same was with the assignments: reading through them they seemed to be rather easy and clear, much more focused on rehearsing or repeating what was already learned earlier, than on the previous weeks. However, the schedules and sleep deprivations proved such that I was not able to do the exercises and course diary until tonight.
+
+
+
+## 0. Import data & libraries
+```{r}
+
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(GGally)
+library(corrplot)
+library(FactoMineR)
+
+getwd()
+setwd("data")
+human <- read.csv("human.csv", row.names = 1)
+
+```
+## 1. Data, summary and graph overview
+
+This week's data comes from the UN. The data originally comes from two different reports, those of the Human development index (HD) and Gender inequality index (GII). These indexes are measured through various variables (the HD 8 variables and GII 12 variables), and each country and region is ranked according to their index. More information on the data and the variables [here](https://hdr.undp.org/data-center/human-development-index#/indicies/HDI) and [here](https://hdr.undp.org/system/files/documents//technical-notes-calculating-human-development-indices.pdf).
+
+The data was first combined based on the country's name. At this point the data included 195 observations of 19 variables. The data was then modified by creation of two combined columns: ratio of females to males in secondary education, and the same ratio in labor force (these were split by gender in the original data). So: labF / labM -> labFM and *mutatis mutandis* the same for secondary education -data. The rows with missing data, and the rows which combined information on continent -level were removed. The country names were transferred from "country" -column to row names. And finally, only the columns pertinent to this inquiry were kept, amounting to 8 variables:
+
+
+- **Edu2.FM** - ratio of females to males in secondary education
+- **Lab.FM** - ratio of females to males in labor force
+- **Life.Exp** - life expectancy
+- **Edu.Exp** - expected average education, in years in school
+- **GNI** - gross national income
+- **Mat.Mor** - maternal mortality
+- **Ado.Birth** - adolescent birth rate
+- **Parli.F**  - percentage of females in parliament
+
+Let's take a look at the variables. 
+
+```{r}
+
+summary(human)
+
+cor(human) %>% corrplot
+
+ggpairs(human)
+
+```
+
+A lot to unpack. First of all, some variables have really wild scales with massive differences. *Mat.Mor* varies from 1 to 1100, with median 49; *GNI* varies from 581 to 123124 with a median of 12040; *Ado.Birth* also varies from 0.6 to 204.8 with a median of 33.6. Some also seem skewed, with means differing from the median significantly. Huge differences between countries, but also huge differences between the scales of each variable (some have max values close to 1, some around 50-200, and *GNI* over 120000). According to Kimmo's book p. 246, "when variables are on very different scales or have very different variances, a PCA of the data should be performed on the correlation matrix" - just to keep this in mind.
+
+Looking at the correlation plots it's easy to see that the variables do have massive correlations. *Mat.Mor* and *Ado.Birth* correlate strongly and negatively with *GNI*, *Edu2.FM*, *Life.Exp* and *Edu.Exp*. This division between the two first mentioned with almost identical correlations, and the four latter with almost identical correlation plots - but inverse from the first two - characterizes the whole data. Rich against poor. The rich live longer and receive better education, while the poor countries are here characterized by maternal mortality and adolescent births, which reflect negatively on the other variables.
+
+Women participating in labor force (or is "work force" the correct term?) and women in parliament do not seem to tip scales much.
+
+
+## 2.  PCA on the raw (non-standardized) human data
+
+Rrrright. As mentioned, the scales are wildly different between variables. So, we already know where this is going, but let's do it anyway.
+
+
+```{r}
+pca_human <- prcomp(human)
+
+# draw a biplot of the principal component representation and the original variables
+biplot(pca_human, choices = 1:2, cex = c(0.8, 1), col = c("grey40", "deeppink2"))
+```
+
+The almighty GNI explains everything. Perhaps stupidly drawn plots like these explain modern economic policies? Be as it may, this approach certainly does not work very well in visualizing our data: one variable, GNI, is on massively larger scale compared to the others, and therefore dominates the output, explaining 99% of the variance only because its numbers are the biggest and baddest. Let's try this again with more reason.
+
+
+## 3.  PCA on the standardized human data
+
+So, the same again, but with standardized data and some labels.
+
+```{r}
+human_std <- scale(human)
+
+pca_human <- prcomp(human_std)
+
+s <- summary(pca_human)
+
+# rounded percentanges of variance captured by each PC
+pca_pr <- round(100*s$importance[2, ], digits = 1)
+
+# create object pc_lab to be used as axis labels
+pc_lab <- paste0(names(pca_pr), " (", pca_pr, "%)")
+
+# draw a biplot
+biplot(pca_human, cex = c(0.6, 1), col = c("grey40", "deeppink2"), xlab = pc_lab[1], ylab = pc_lab[2])
+```
+
+A bit more sensible outcome. Now we can actually see the significant factors at work. As noted earlier, the 2 vs 4 -dynamic is what separates the countries most, and accounts for 53.6% of the variance. Interestingly here we can also see the *Parli.F* and *Labo.FM* -variables, which account for 16.2% of the variance.
+
+
+
+
+## 4. Interpretation
+
+Right. I kinda feel like I already gave most of my interpretation earlier, but let's recap. The primary dynamic in the data is the division between poor and rich countries. Rich countries with high GNI score better also on life expectancy, expected secondary education and ratio of women in secondary education (to the left in the chart).
+
+Poorer countries fare worse in these factors, but the main visible factors were maternal mortality and adolescent births: the countries with high numbers in these variables were very distinctly set apart from the countries in the first group, and are found to the right from the origo. 
+
+Interestingly, the ratio of women in parliamentary roles or participating in the work force were not significantly correlated with this rich-poor -dynamic, but formed a secondary axis within this division. It seems women in parliament and/or workforce are not as important as education in relation to the other variables.
+
+
+## 5. Oh,would you look at the clock! Put the kettle on, dear, - and fetch the scones!
+
+
+### Its **T-time**.
+
+Sorry about that, don't know what got into me. Back to R.
+
+
+```{r}
+tea <- read.csv("https://raw.githubusercontent.com/KimmoVehkalahti/Helsinki-Open-Data-Science/master/datasets/tea.csv", stringsAsFactors = TRUE)
+
+str(tea)
+dim(tea)
+view(tea)
+
+# I'll remove the age-variable, as it's the only numerical one, and the following pivot_longer doesn't work with it 
+tea <- select(tea, -age)
+
+# In two parts
+pivot_longer(tea[1:18], cols = everything()) %>% 
+  ggplot(aes(value)) + facet_wrap("name", scales = "free") + 
+  geom_bar() + 
+  theme(axis.text.x = element_text(size = 6))
+
+pivot_longer(tea[19:35], cols = everything()) %>% 
+  ggplot(aes(value)) + facet_wrap("name", scales = "free") + 
+  geom_bar() + 
+  theme(axis.text.x = element_text(size = 6))
+
+
+```
+
+ Plenty of variables. Tea is very interesting, I must say. As per the assignment, let's select some variables, and do the MCA. We'll go with *tea*, *age_Q*, *escape.exoticism*, *exciting*, *relaxing* and *spirituality*, because why the hell not. Should be weird. Maube we'll find out what tea people in different age groups drink to relax and have spiritual, exotic or escapistic experiences. For science!
+ 
+ 
+ 
+```{r}
+
+keep_columns <- c("Tea", "age_Q", "escape.exoticism", "exciting", "relaxing", "spirituality")
+t_time <- select(tea, keep_columns)
+
+
+# check out the new data
+str(t_time)
+summary(t_time)
+
+pivot_longer(t_time, cols = everything()) %>% 
+  ggplot(aes(value)) + facet_wrap("name", scales = "free") + 
+  geom_bar() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6))
+
+```
+
+
+Next, the MCA.
+
+
+ 
+```{r}
+mca <- MCA(t_time, graph = FALSE)
+
+summary(mca)
+
+
+plot(mca, invisible=c("ind"), graph.type = "classic", habillage = "quali")
+
+```
+
+As we can see, these chosen variables do not account for much variance in the data: only 15.29 + 14.56 = 29.85%. So, all the following analyses should be taken with a pinch of salt. Or a handful. But, it seems that there is a NO-camp and a YES-camp on the question of whether tea as a substance awakens feelings, such as spirituality, escapism, excitement and/or relaxation. The younger one is, the more prone one is to succumb to such frivolous emotions. The NO-camp, proudly heralded by the 60+ -class, considers tea not exciting, not relaxing, not spiritual and most definitely not in anyway connected with escapist exoticism. The best tea to drink in the NO-camp is black (as ones soul), but some also go with green (as envy). Earl Grey, on the other hand, is for the babies in the YES-camp.
+
+On a more serious note, not much clustering. The oldest age groups contributed most to the analyses, followed by black and green teas (judging by the values on the v-test). But, at the moment I think I'm just too tired to analyse anything further. I'll just have a nice cup of Earl Grey and commit these to the Hub.
+
+
+

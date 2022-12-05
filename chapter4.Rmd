@@ -270,7 +270,7 @@ library(plotly)
 ```{r}
 plot_ly(x = matrix_product$LD1, y = matrix_product$LD2, z = matrix_product$LD3, type= 'scatter3d', mode='markers')
 ```
-# #WOW 
+## #WOW 
 
 
 ##### Adjust the code: add argument color as a argument in the plot_ly() function. Set the color to be the crime classes of the train set. 
